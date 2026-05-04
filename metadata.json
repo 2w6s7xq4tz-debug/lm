@@ -1,5 +1,5 @@
 {
-  "name": "LuminaStream",
+  "name": "Lumina Movie",
   "description": "Una plataforma de streaming con panel de gestión (CMS) y vista pública, integrada con Firebase para persistencia de datos.",
   "requestFramePermissions": [],
   "majorCapabilities": []

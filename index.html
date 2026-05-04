@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LuminaStream</title>
+<title>Lumina Movie</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest/dist/mpegts.min.js"></script>
 <style>
 :root{--bg:#080a0f;--sf:#0f1219;--s2:#161b24;--bd:rgba(255,255,255,.06);--blue:#3b82f6;--bdim:rgba(59,130,246,.12);--tx:#f1f5f9;--mt:#4b5563;--fn:'Outfit',sans-serif;--mo:'JetBrains Mono',monospace}
 *{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth}
@@ -12,49 +14,62 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);min-height:100vh
 
 /* ── NAV ── */
 nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 48px;background:rgba(8,10,15,.88);backdrop-filter:blur(24px);border-bottom:1px solid var(--bd)}
-.nl{display:flex;align-items:center;gap:10px}
+.nl{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .nli{width:32px;height:32px;background:var(--blue);border-radius:8px;display:flex;align-items:center;justify-content:center}
 .nlt{font-size:17px;font-weight:800;letter-spacing:-.5px}.nlt span{color:var(--blue)}
-.nlinks{display:flex;gap:4px}
-.nlink{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;color:var(--mt);cursor:pointer;transition:all .2s;border:none;background:transparent;font-family:var(--fn)}
+.nlinks{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.nlinks::-webkit-scrollbar{display:none}
+.nlink{padding:8px 16px;border-radius:8px;font-size:14px;font-weight:600;color:var(--mt);cursor:pointer;transition:all .2s;border:none;background:transparent;font-family:var(--fn);white-space:nowrap}
 .nlink:hover,.nlink.active{color:var(--tx);background:var(--s2)}
 .nav-srch{position:relative}
-.nav-srch svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mt);pointer-events:none}
-.nav-srch input{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:8px 14px 8px 38px;font-family:var(--fn);font-size:13px;color:var(--tx);outline:none;width:210px;transition:all .2s}
-.nav-srch input:focus{border-color:var(--blue);width:260px}
-.nav-srch input::placeholder{color:var(--mt)}
+.srch-box{display:flex;align-items:center;position:relative}
+.srch-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--mt);pointer-events:none}
+.srch-box input{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:8px 14px 8px 38px;font-family:var(--fn);font-size:13px;color:var(--tx);outline:none;width:180px;transition:all .2s}
+.srch-box input:focus{border-color:var(--blue);width:220px}
+.srch-box input::placeholder{color:var(--mt)}
+.srch-toggle,.srch-close{display:none}
+
+.srch-results{position:absolute;top:100%;left:0;right:0;background:var(--sf);border:1px solid var(--bd);border-radius:12px;margin-top:8px;max-height:400px;overflow-y:auto;z-index:300;display:none;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+.srch-results.active{display:block}
+.srch-item{display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;transition:background .2s;border-bottom:1px solid var(--bd)}
+.srch-item:last-child{border-bottom:none}
+.srch-item:hover{background:var(--s2)}
+.srch-item img{width:36px;height:50px;object-fit:cover;border-radius:6px;background:var(--s2)}
+.srch-item-info{flex:1;min-width:0}
+.srch-item-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srch-item-meta{font-size:11px;color:var(--mt);margin-top:2px}
 
 /* ── HERO ── */
-.hero{min-height:100vh;display:flex;align-items:flex-end;position:relative;padding:120px 48px 80px;overflow:hidden}
+.hero{min-height:450px;height:60vh;max-height:700px;display:flex;align-items:flex-end;position:relative;padding:0 48px 40px;overflow:hidden}
 .hero-bg{position:absolute;inset:0;z-index:0}
 /* backdrop — much more visible */
-.hero-bd{position:absolute;inset:0;background-size:cover;background-position:center top;opacity:0;transition:opacity 1.2s ease}
-.hero-bd.vis{opacity:.72}
+.hero-bd{position:absolute;inset:0;background-size:cover;background-position:center 20%;opacity:0;transition:opacity 0.6s ease}
+.hero-bd.vis{opacity:1}
 /* gradient: strong left fade for text, subtle bottom fade */
-.hero-ov{position:absolute;inset:0;background:linear-gradient(to right,rgba(8,10,15,.96) 32%,rgba(8,10,15,.18) 70%,rgba(8,10,15,.05) 100%),linear-gradient(to top,rgba(8,10,15,1) 0%,transparent 45%)}
-.hero-cont{position:relative;z-index:2;max-width:600px}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:var(--bdim);border:1px solid rgba(59,130,246,.25);border-radius:100px;font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:22px}
+.hero-ov{position:absolute;inset:0;background:linear-gradient(to right,rgba(8,10,15,0.98) 15%,rgba(8,10,15,0.3) 65%,transparent 100%),linear-gradient(to top,var(--bg) 0%,transparent 60%)}
+.hero-cont{position:relative;z-index:2;max-width:700px;height:300px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;transition:opacity 0.4s ease, transform 0.4s ease}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:var(--bdim);border:1px solid rgba(59,130,246,.25);border-radius:100px;font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:18px}
 .ldot{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:ld 1.5s infinite}
 @keyframes ld{0%,100%{opacity:1}50%{opacity:.3}}
-.hero-title{font-size:clamp(34px,5.5vw,68px);font-weight:800;line-height:1.05;letter-spacing:-1.5px;margin-bottom:18px;text-shadow:0 2px 24px rgba(0,0,0,.6)}
-.hero-desc{font-size:16px;color:#94a3b8;line-height:1.75;margin-bottom:20px;max-width:480px}
+.hero-title{font-size:clamp(32px,7.5vw,58px);font-weight:900;line-height:1;letter-spacing:-2px;margin-bottom:14px;text-shadow:0 2px 30px rgba(0,0,0,.8)}
+.hero-desc{font-size:15px;color:#94a3b8;line-height:1.6;margin-bottom:20px;max-width:540px;height:72px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 /* genres row in hero */
-.hero-genres{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
-.hg{font-size:12px;padding:4px 12px;border-radius:100px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font-weight:600;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.1)}
-.hero-meta{display:flex;gap:14px;align-items:center;margin-bottom:28px;flex-wrap:wrap}
-.hero-rating{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:700;color:#fbbf24}
-.hero-year{font-size:13px;color:rgba(255,255,255,.5);font-family:var(--mo)}
+.hero-genres{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
+.hg{font-size:11px;padding:5px 14px;border-radius:100px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.8);font-weight:700;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.1)}
+.hero-meta{display:flex;gap:16px;align-items:center;margin-bottom:28px;flex-wrap:wrap}
+.hero-rating{display:flex;align-items:center;gap:5px;font-size:16px;font-weight:800;color:#fbbf24}
+.hero-year{font-size:14px;color:rgba(255,255,255,0.5);font-family:var(--mo);font-weight:500}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
-.btn-w{display:flex;align-items:center;gap:10px;padding:14px 28px;background:var(--blue);color:#fff;border:none;border-radius:12px;font-family:var(--fn);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s}
-.btn-w:hover{background:#2563eb;transform:translateY(-2px);box-shadow:0 12px 40px rgba(59,130,246,.4)}
-.btn-i{display:flex;align-items:center;gap:10px;padding:14px 24px;background:rgba(255,255,255,.1);color:var(--tx);border:1px solid rgba(255,255,255,.15);border-radius:12px;font-family:var(--fn);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;backdrop-filter:blur(8px)}
-.btn-i:hover{background:rgba(255,255,255,.18)}
+.btn-w{display:flex;align-items:center;gap:10px;padding:14px 30px;background:var(--blue);color:#fff;border:none;border-radius:14px;font-family:var(--fn);font-size:15px;font-weight:700;cursor:pointer;transition:all .3s ease}
+.btn-w:hover{background:#2563eb;transform:translateY(-3px);box-shadow:0 12px 40px rgba(59,130,246,0.4)}
+.btn-i{display:flex;align-items:center;gap:10px;padding:14px 26px;background:rgba(255,255,255,0.08);color:var(--tx);border:1px solid rgba(255,255,255,0.12);border-radius:14px;font-family:var(--fn);font-size:15px;font-weight:700;cursor:pointer;transition:all .3s ease;backdrop-filter:blur(8px)}
+.btn-i:hover{background:rgba(255,255,255,0.15)}
 
 /* ── SECTION WRAPPER ── */
-.section{padding:52px 48px}
-.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
-.sec-tt{font-size:20px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px}
-.sec-sub{font-size:13px;color:var(--mt)}
+.section{padding:20px 48px}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;gap:20px}
+.sec-tt{font-size:22px;font-weight:900;letter-spacing:-0.5px;display:flex;align-items:center;gap:12px}
+.sec-sub{font-size:14px;color:var(--mt)}
 
 /* ── CAROUSEL ── */
 .car-wrap{position:relative}
@@ -74,9 +89,10 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;ali
 .cc-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}
 .cc-meta{display:flex;gap:6px;align-items:center}
 /* carousel section label */
-.car-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;padding:2px 8px;border-radius:5px;margin-right:2px}
-.car-label.hot{background:rgba(239,68,68,.15);color:#f87171}
-.car-label.new{background:rgba(34,197,94,.15);color:#4ade80}
+.car-label{font-size:9px;font-weight:800;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-right:2px;display:inline-flex;align-items:center;gap:4px;line-height:1}
+.car-label.hot{background:rgba(239,68,68,0.25);color:#fca5a5;border:1px solid rgba(239,68,68,0.2)}
+.car-label.new{background:rgba(34,197,94,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.2)}
+.car-label span{font-size:10px;display:inline-block}
 
 /* ── GENRE PILLS ── */
 .genre-section{padding:0 48px 16px}
@@ -91,11 +107,16 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;ali
 .cat-section{padding:16px 48px 60px}
 .cat-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .content-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:18px}
-.card{border-radius:14px;overflow:hidden;cursor:pointer;position:relative;transition:transform .25s,box-shadow .25s;background:var(--sf);border:1px solid var(--bd)}
-.card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 20px 60px rgba(0,0,0,.6)}
-.card-poster{width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--s2);display:block}
+
+/* CARDS IMPROVED */
+.card{border-radius:14px;overflow:hidden;cursor:pointer;position:relative;transition:all .4s cubic-bezier(.175, .885, .32, 1.275);background:var(--sf);border:1px solid var(--bd);box-shadow: 0 4px 12px rgba(0,0,0,0.2)}
+.card:hover{transform:translateY(-12px);box-shadow:0 30px 60px rgba(0,0,0,0.7);border-color:rgba(59,130,246,0.3)}
+.card::after {content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%, rgba(59,130,246,0.15), transparent 70%);opacity:0;transition:opacity .3s}
+.card:hover::after {opacity:1}
+.card-poster{width:100%;aspect-ratio:2/3;object-fit:cover;background:var(--s2);display:block;transition:transform .6s ease}
+.card:hover .card-poster{transform:scale(1.08)}
 .card-ph{width:100%;aspect-ratio:2/3;background:linear-gradient(135deg,var(--s2),var(--sf));display:flex;align-items:center;justify-content:center;font-size:44px}
-.card-ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.95) 38%,transparent 68%);opacity:0;transition:opacity .25s;display:flex;align-items:flex-end;padding:14px}
+.card-ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.95) 10%,transparent 60%);opacity:0;transition:opacity .25s;display:flex;align-items:flex-end;padding:14px}
 .card:hover .card-ov{opacity:1}
 .card-play{width:42px;height:42px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;transition:transform .2s}
 .card:hover .card-play{transform:scale(1.1)}
@@ -113,10 +134,13 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;ali
 .modal-ov.open{opacity:1;pointer-events:all}
 .modal{background:var(--sf);border:1px solid var(--bd);border-radius:22px;width:100%;max-width:920px;max-height:92vh;overflow-y:auto;transform:scale(.95) translateY(20px);transition:transform .3s}
 .modal-ov.open .modal{transform:scale(1) translateY(0)}
+.modal-handle{width:40px;height:4px;background:rgba(255,255,255,.2);border-radius:10px;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:510;display:none;cursor:grab}
+@media(max-width:768px){ .modal-handle{display:block} }
 .modal-back{position:relative;height:300px;background-size:cover;background-position:center top;border-radius:22px 22px 0 0;overflow:hidden;background-color:var(--s2)}
 .modal-back-ov{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(15,18,25,.05) 0%,rgba(15,18,25,1) 100%)}
-.modal-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--tx);transition:all .2s;z-index:10}
-.modal-close:hover{background:rgba(239,68,68,.3)}
+.modal-close{position:absolute;top:max(16px, env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;transition:all .3s;z-index:500;backdrop-filter:blur(8px)}
+.modal-close:hover{background:rgba(239,68,68,.6);transform:scale(1.1)}
+.modal-close:active{transform:scale(.9)}
 .modal-body{padding:0 30px 30px;margin-top:-65px;position:relative;z-index:2}
 .modal-title{font-size:28px;font-weight:800;letter-spacing:-1px;margin-bottom:11px;text-shadow:0 2px 16px rgba(0,0,0,.8)}
 .modal-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
@@ -172,12 +196,101 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
 .et{font-size:17px;font-weight:700;margin-bottom:7px;opacity:.45}
 .es{font-size:14px;color:var(--mt)}
 
+/* ── CUSTOM PLAYER ── */
+.custom-player{position:relative;width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.custom-player video{width:100%;height:100%;object-fit:contain}
+.player-controls{position:absolute;bottom:0;left:0;right:0;padding:20px;background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);transition:opacity 0.3s, transform 0.3s;display:flex;flex-direction:column;gap:10px;opacity:0;pointer-events:none;z-index:10}
+.custom-player:hover .player-controls,.custom-player.active .player-controls{opacity:1;pointer-events:all}
+.player-top-row{display:flex;align-items:center;gap:15px;width:100%}
+.player-btn{background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:8px;border-radius:50%;transition:background 0.2s;min-width:40px;min-height:40px}
+.player-btn:hover{background:rgba(255,255,255,0.15)}
+.player-btn svg{display:block;overflow:visible;width:20px;height:20px}
+.player-progress-wrap{flex:1;height:4px;background:rgba(255,255,255,0.2);position:relative;cursor:pointer;border-radius:2px}
+.player-progress-bar{height:100%;background:var(--blue);width:0%;position:relative;border-radius:2px}
+.player-progress-handle{position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:12px;height:12px;background:#fff;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.4);display:none}
+.player-progress-wrap:hover .player-progress-handle{display:block}
+.player-bottom-row{display:flex;align-items:center;justify-content:space-between;padding-top:5px}
+
+.unmute-overlay{position:absolute;top:20px;left:20px;background:rgba(0,0,0,0.7);color:#fff;padding:8px 15px;border-radius:20px;font-size:12px;font-weight:700;display:none;align-items:center;gap:8px;cursor:pointer;z-index:30;border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(5px)}
+.unmute-overlay.active{display:flex}
+.unmute-overlay svg{color:var(--blue)}
+.player-left{display:flex;align-items:center;gap:12px}
+.player-right{display:flex;align-items:center;gap:12px}
+.player-time{font-size:12px;font-weight:600;font-family:var(--mo);color:rgba(255,255,255,0.8)}
+.player-branding{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#fff;margin-right:15px;opacity:0.9}
+.player-branding span{color:var(--blue)}
+.player-select-wrap{position:relative}
+.player-settings-menu{position:absolute;bottom:calc(100% + 10px);right:0;background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:8px;min-width:180px;box-shadow:0 10px 30px rgba(0,0,0,0.5);display:none;z-index:20}
+.player-settings-menu.active{display:block}
+.player-submenu{display:none}
+.player-submenu.active{display:block}
+.player-option{padding:10px 12px;font-size:13px;font-weight:600;color:var(--mt);cursor:pointer;border-radius:8px;white-space:nowrap;display:flex;align-items:center;justify-content:space-between;transition:all 0.2s;gap:10px}
+.player-option:hover{background:var(--s2);color:var(--tx)}
+.player-option.active{color:var(--blue);background:var(--bdim)}
+.player-option svg{opacity:0.6}
+.player-menu-header{padding:8px 12px;font-size:11px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bd);margin-bottom:5px;cursor:pointer}
+.player-menu-header:hover{background:var(--s2)}
+
+@media(max-width:768px){
+  .player-controls{padding:15px 10px}
+  .player-branding{display:none}
+}
+
 /* ── DOWNLOAD BTN (movie) ── */
 .btn-dl{display:flex;align-items:center;gap:8px;padding:14px 20px;background:rgba(34,197,94,.1);color:#4ade80;border:1px solid rgba(34,197,94,.2);border-radius:12px;font-family:var(--fn);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;text-decoration:none}
 .btn-dl:hover{background:rgba(34,197,94,.2)}
 
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
-@media(max-width:768px){nav{padding:0 20px}.hero{padding:100px 20px 60px}.section,.cat-section,.genre-section{padding-left:20px;padding-right:20px}footer{padding:28px 20px;flex-direction:column;gap:10px;text-align:center}.car-btn{display:none}}
+@media(max-width:768px){
+  nav{padding:0 16px;height:64px}
+  .nl{gap:8px}
+  .nl.hide-mobile{display:none}
+  .nlt{font-size:15px}
+  .nlinks{gap:0}
+  .nlinks.hide-mobile{display:none}
+  .nlink{padding:8px 10px;font-size:13px}
+  
+  .nav-srch{position:static}
+  .srch-toggle{display:flex;width:40px;height:40px;align-items:center;justify-content:center;color:var(--mt);cursor:pointer;border-radius:10px}
+  .srch-toggle:active{background:var(--s2)}
+  .srch-box{display:none;position:absolute;left:0;top:0;width:100%;height:100%;background:var(--bg);z-index:200;align-items:center;padding:0 16px}
+  .nav-srch.active .srch-box{display:flex}
+  .nav-srch.active .srch-toggle{display:none}
+  .srch-box input{flex:1;width:100% !important;height:42px;padding:0 42px;background:var(--s2);border:1px solid var(--bd);border-radius:12px}
+  .srch-close{display:flex;position:absolute;right:16px;color:var(--mt);padding:10px;cursor:pointer;z-index:210}
+  .srch-icon{left:28px;z-index:210}
+  .srch-results{position:fixed;top:64px;left:0;right:0;bottom:0;width:100vw;height:calc(100vh - 64px);max-height:none;border-radius:0;margin-top:0;border:none}
+  
+  .hero{padding:100px 24px 40px;min-height:480px;height:auto;max-height:none}
+  .hero-cont{max-width:100%;height:auto}
+  .hero-title{font-size:36px;letter-spacing:-1px;margin-bottom:10px}
+  .hero-desc{font-size:14px;max-width:100%;height:auto;-webkit-line-clamp:4;margin-bottom:24px}
+  .hero-actions{width:100%}
+  .btn-w, .btn-i{width:100%;justify-content:center}
+  
+  .section{padding:30px 20px}
+  .sec-hd{flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:20px}
+  .sec-tt{font-size:20px}
+  
+  .content-grid{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}
+  .card-body{padding:10px}
+  .card-title{font-size:12px}
+  
+  .car{gap:10px}
+  .cc{flex:0 0 130px}
+  
+  .modal{max-height:100vh;border-radius:0;margin:0}
+  .modal-ov{padding:0}
+  .modal-body{padding:0 20px 30px}
+  .modal-title{font-size:24px}
+  .vframe{aspect-ratio:16/9}
+  
+  footer{flex-direction:column;gap:15px;text-align:center;padding:30px 20px}
+}
+
+@media(max-width:400px){
+  .content-grid{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -186,7 +299,7 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
 <nav>
   <div class="nl">
     <div class="nli"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4"/></svg></div>
-    <div class="nlt">LUMINA<span>Stream</span></div>
+    <div class="nlt">Lumina<span>Movie</span></div>
   </div>
   <div class="nlinks">
     <button class="nlink active" onclick="navFilter('all',this)">Inicio</button>
@@ -195,9 +308,14 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
     <button class="nlink" onclick="navFilter('Documentales',this)">Docs</button>
     <button class="nlink" onclick="navFilter('Anime',this)">Anime</button>
   </div>
-  <div class="nav-srch">
-    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg>
-    <input type="text" id="navSearch" placeholder="Buscar..." oninput="onSearch()">
+  <div class="nav-srch" id="navSearchCont">
+    <div class="srch-toggle" onclick="toggleMobileSearch()"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg></div>
+    <div class="srch-box">
+      <svg class="srch-icon" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.34-4.34"/></svg>
+      <input type="text" id="navSearch" placeholder="Buscar..." oninput="onSearch()" autocomplete="off">
+      <div id="srchResults" class="srch-results"></div>
+      <div class="srch-close" onclick="closeMobileSearch()"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+    </div>
   </div>
 </nav>
 
@@ -210,6 +328,18 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
   <div class="hero-cont" id="heroCont"></div>
 </div>
 
+<!-- HISTORY -->
+<div class="section" id="historySection" style="padding-bottom:10px; display:none;">
+  <div class="sec-hd" style="margin-bottom:18px">
+    <div class="sec-tt">⏱️ Seguir Viendo</div>
+  </div>
+  <div class="car-wrap">
+    <button class="car-btn l" onclick="scrollElem('histCarousel', -1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <div class="car" id="histCarousel"></div>
+    <button class="car-btn r" onclick="scrollElem('histCarousel', 1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+  </div>
+</div>
+
 <!-- CAROUSEL -->
 <div class="section" style="padding-bottom:20px">
   <div class="sec-hd">
@@ -217,9 +347,9 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
     <div class="sec-sub" id="carSubtitle">Más vistas · Recientes</div>
   </div>
   <div class="car-wrap">
-    <button class="car-btn l" onclick="scrollCar(-1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button class="car-btn l" onclick="scrollElem('carousel', -1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     <div class="car" id="carousel"></div>
-    <button class="car-btn r" onclick="scrollCar(1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <button class="car-btn r" onclick="scrollElem('carousel', 1)"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
   </div>
 </div>
 
@@ -241,13 +371,14 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
 </div>
 
 <footer>
-  <div class="ft-logo">LUMINA<span>Stream</span></div>
-  <div class="ft-txt">© 2025 LuminaStream · Creado por SSF.15</div>
+  <div class="ft-logo">Lumina<span>Movie</span></div>
+  <div class="ft-txt">© 2026 Lumina Movie · Todos los derechos reservados · Creado por SSF.15</div>
 </footer>
 
 <!-- MODAL -->
 <div class="modal-ov" id="modalOv" onclick="closeModalOv(event)">
-  <div class="modal">
+  <div class="modal" id="modalElem">
+    <div class="modal-handle"></div>
     <div class="modal-back" id="modalBack">
       <div class="modal-back-ov"></div>
       <button class="modal-close" onclick="closeModal()"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
@@ -257,11 +388,13 @@ footer{padding:36px 48px;border-top:1px solid var(--bd);display:flex;align-items
 </div>
 
 <script>
-const SK='lumina_stream_content';
+const SK='lumina_movie_content';
 const VK='lumina_views';
+const HK='lumina_history';
+const CK='lumina_completed';
+
 // ── FIREBASE CONFIG ──
-// ── FIREBASE CONFIG ──
-const FIREBASE_CFG = {
+const DEFAULT_FB_CFG = {
   "projectId": "gen-lang-client-0591878123",
   "appId": "1:338930774663:web:09fc64c02a18cf5085be22",
   "apiKey": "AIzaSyC9X3dWVaytBbceL1a8-4OqXH1_hVKwGCE",
@@ -269,11 +402,19 @@ const FIREBASE_CFG = {
   "firestoreDatabaseId": "ai-studio-cb8cd042-c4ff-4bcf-aede-79f3126c7399",
   "storageBucket": "gen-lang-client-0591878123.firebasestorage.app",
   "messagingSenderId": "338930774663"
-}; 
+};
+
+function getFbCfg() {
+  try {
+    const saved = localStorage.getItem('lumina_fb_cfg');
+    return saved ? JSON.parse(saved) : DEFAULT_FB_CFG;
+  } catch(e) { return DEFAULT_FB_CFG; }
+}
 
 let allData=[], typeFilter='all', genreFilter='all', yearFilter='all', searchQ='';
 let curItem=null, curSeason=0, curEp=0;
-  fbDB = null;
+let heroIndex=0, heroItems=[], heroTimer=null;
+let fbApp=null, fbDB=null;
 
 /* ── FIREBASE ERROR HANDLING ── */
 function handleFirestoreError(error, operationType, path) {
@@ -291,12 +432,12 @@ function handleFirestoreError(error, operationType, path) {
 
 /* ── FIREBASE INIT ── */
 async function initFirebase(){
-  const cfg = FIREBASE_CFG;
+  const cfg = getFbCfg();
   if(!cfg || !cfg.apiKey){loadLocal(); return}
   try{
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js');
-    const { getFirestore, collection, doc, onSnapshot, query, orderBy } = await import('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js');
-    
+    const { getFirestore, collection, doc, onSnapshot, query, orderBy, increment } = await import('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js');
+    fbModular = { collection, doc, onSnapshot, query, orderBy, increment };
     fbApp = initializeApp(cfg);
     fbDB = getFirestore(fbApp, cfg.firestoreDatabaseId);
     
@@ -313,7 +454,7 @@ function startRealtimeRead(collection, onSnapshot, query, orderBy, docFunc){
   onSnapshot(q, snap => {
     allData = snap.docs.map(d => d.data());
     localStorage.setItem(SK, JSON.stringify(allData));
-    renderHero(allData);
+    setupHeroItems(allData);
     renderCarousel(allData);
     buildPills(allData);
     applyFilters();
@@ -323,21 +464,23 @@ function startRealtimeRead(collection, onSnapshot, query, orderBy, docFunc){
   });
 
   // Sync views
-  const viewsRef = docFunc(fbDB, 'views', 'data');
-  onSnapshot(viewsRef, docSnap => {
-    if(docSnap.exists()){
-      localStorage.setItem(VK, JSON.stringify(docSnap.data()));
-      localStorage.setItem('lumina_views_update', Date.now());
-      renderCarousel(allData);
-    }
+  onSnapshot(collection(fbDB, 'stats'), snapshot => {
+    const views = {};
+    snapshot.docs.forEach(doc => {
+      views[doc.id] = doc.data().views || 0;
+    });
+    localStorage.setItem(VK, JSON.stringify(views));
+    localStorage.setItem('lumina_views_update', Date.now());
+    renderCarousel(allData);
+    setupHeroItems(allData);
   }, e => {
-    handleFirestoreError(e, 'GET', 'views/data');
+    handleFirestoreError(e, 'GET', 'stats');
   });
 }
 
 function loadLocal(){
   allData=getData();
-  renderHero(allData);
+  setupHeroItems(allData);
   renderCarousel(allData);
   buildPills(allData);
   applyFilters();
@@ -345,74 +488,184 @@ function loadLocal(){
 
 function getData(){try{return JSON.parse(localStorage.getItem(SK))||[]}catch{return[]}}
 function getViews(){try{return JSON.parse(localStorage.getItem(VK))||{}}catch{return{}}}
-function saveViews(v){
-  localStorage.setItem(VK,JSON.stringify(v));
-  localStorage.setItem('lumina_views_update',Date.now());
-  // Also write views to Firestore if connected
-  if(fbDB){
-    import('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js').then(({ doc, setDoc }) => {
-      setDoc(doc(fbDB, 'views', 'data'), v).catch(() => {});
-    });
+function getHistory(){try{return JSON.parse(localStorage.getItem(HK))||{}}catch{return{}}}
+function getCompleted(){try{return JSON.parse(localStorage.getItem(CK))||{}}catch{return{}}}
+function saveCompleted(itemId, episodeId){
+  const c = getCompleted();
+  if(!c[itemId]) c[itemId] = [];
+  if(episodeId && !c[itemId].includes(episodeId)) c[itemId].push(episodeId);
+  else if(!episodeId && !c[itemId].includes('movie')) c[itemId].push('movie');
+  localStorage.setItem(CK, JSON.stringify(c));
+}
+function isItemCompleted(item) {
+  const c = getCompleted()[item.id];
+  if (!c) return false;
+  if (item.type === 'Series') {
+    let tot = 0;
+    item.seasons?.forEach(s => tot += (s.episodes?.length||0));
+    return c.length >= tot && tot > 0;
   }
+  return true;
+}
+
+function saveHistory(itemId, episodeId, time, duration){
+  if (time < 10) return; 
+  let finished = false;
+  if (duration && time > duration - 15) { time = 0; finished = true; }
+  const h = getHistory();
+  if (finished) {
+    if (h[itemId] && h[itemId].episodeId === episodeId) delete h[itemId];
+    saveCompleted(itemId, episodeId);
+  } else {
+    h[itemId] = { episodeId, time, ts: Date.now() };
+  }
+  localStorage.setItem(HK, JSON.stringify(h));
+}
+
+function trackView(id){
+  if(!id) return;
+  const views = getViews();
+  views[id] = (views[id]||0) + 1;
+  localStorage.setItem(VK, JSON.stringify(views));
+  localStorage.setItem('lumina_views_update', Date.now());
+  
+  if(fbDB && fbModular && fbModular.increment){
+    const { doc, setDoc, increment } = fbModular;
+    setDoc(doc(fbDB, 'stats', id), { views: increment(1) }, { merge: true }).catch(() => {});
+  }
+}
+
+function getEpId() {
+  if (!curItem || curItem.type !== 'Series') return null;
+  const ep = curItem.seasons[curSeason]?.episodes[curEp];
+  if (!ep) return null;
+  return ep.id || `S${curSeason}E${curEp}`;
 }
 
 function badgeClass(t){return{Películas:'bm',Series:'bs2',Documentales:'bd2',Anime:'ba'}[t]||'bm'}
 
 /* ── HERO ── */
-function renderHero(data){
-  const bd=document.getElementById('heroBd');
-  const hc=document.getElementById('heroCont');
-  if(!data.length){
-    bd.style.backgroundImage='';bd.classList.remove('vis');
-    hc.innerHTML=`<div class="hero-badge"><span class="ldot"></span>Plataforma</div><h1 class="hero-title" style="font-size:clamp(28px,4vw,52px)">Tu Contenido<br>Aquí Pronto</h1><p class="hero-desc">Abre el Panel CMS para publicar películas y series.</p>`;
-    return;
+function setupHeroItems(data) {
+  if(!data.length) { heroItems = []; renderHero(null); return; }
+  const views = getViews();
+  // 3 most famous
+  const famous = [...data].sort((a,b) => (views[b.id]||0) - (views[a.id]||0)).slice(0, 3);
+  // 3 most recent (not already in famous)
+  const famousIds = new Set(famous.map(f => f.id));
+  const recent = [...data].reverse().filter(d => !famousIds.has(d.id)).slice(0, 3);
+  
+  heroItems = [...famous, ...recent];
+  heroIndex = 0;
+  renderHero(heroItems[heroIndex]);
+  
+  if (heroTimer) clearInterval(heroTimer);
+  if (heroItems.length > 1) {
+    heroTimer = setInterval(() => {
+      heroIndex = (heroIndex + 1) % heroItems.length;
+      renderHero(heroItems[heroIndex]);
+    }, 8000);
   }
-  const f=data[data.length-1];
-  const img=f.backdrop||f.poster||'';
-  if(img){bd.style.backgroundImage=`url(${img})`;setTimeout(()=>bd.classList.add('vis'),60)}
-  else{bd.style.backgroundImage='';bd.classList.remove('vis')}
-  hc.innerHTML=`
-    <div class="hero-badge"><span class="ldot"></span>${f.status==='Próximamente'?'Próximamente':'Destacado'}</div>
-    <h1 class="hero-title">${f.title}</h1>
-    ${f.desc?`<p class="hero-desc">${f.desc.slice(0,190)}${f.desc.length>190?'…':''}</p>`:''}
-    ${(f.genres||[]).length?`<div class="hero-genres">${(f.genres).slice(0,4).map(g=>`<span class="hg">${g}</span>`).join('')}</div>`:''}
-    <div class="hero-meta">
-      ${f.rating?`<div class="hero-rating">★ ${f.rating}</div>`:''}
-      ${f.year?`<div class="hero-year">${f.year}</div>`:''}
-    </div>
-    <div class="hero-actions">
-      <button class="btn-w" onclick="openModal('${f.id}')"><svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Ver Ahora</button>
-      <button class="btn-i" onclick="openModal('${f.id}')"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Más Info</button>
-    </div>`;
 }
 
-/* ── CAROUSEL ── */
+function renderHero(f){
+  const bd=document.getElementById('heroBd');
+  const hc=document.getElementById('heroCont');
+  if(!f) return;
+  
+  const img=f.backdrop||f.poster||'';
+  bd.style.opacity = '0.3';
+  
+  setTimeout(() => {
+    if(img) bd.style.backgroundImage=`url(${img})`;
+    bd.style.opacity = '1';
+  }, 400);
+
+  hc.style.opacity = '0';
+  hc.style.transform = 'translateY(10px)';
+  
+  setTimeout(() => {
+    hc.innerHTML=`
+      <div class="hero-badge"><span class="ldot"></span>${f.status==='Próximamente'?'Próximamente':'Destacado'}</div>
+      <h1 class="hero-title">${f.title}</h1>
+      ${f.desc?`<p class="hero-desc">${f.desc.slice(0,180)}${f.desc.length>180?'…':''}</p>`:''}
+      <div class="hero-meta">
+        ${f.rating?`<div class="hero-rating">★ ${f.rating}</div>`:''}
+        ${f.year?`<div class="hero-year">${f.year}</div>`:''}
+      </div>
+      <div class="hero-actions">
+        <button class="btn-w" onclick="openModal('${f.id}')"><svg width="15" height="15" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Ver Ahora</button>
+        <button class="btn-i" onclick="openModal('${f.id}')"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>Más Info</button>
+      </div>`;
+    hc.style.opacity = '1';
+    hc.style.transform = 'translateY(0)';
+  }, 500);
+}
+
+/* ── HISTORY / CAROUSEL ── */
+function renderHistory(data) {
+  const h = getHistory();
+  const histIds = Object.keys(h).sort((a,b) => h[b].ts - h[a].ts);
+  const histSection = document.getElementById('historySection');
+  const histCar = document.getElementById('histCarousel');
+  
+  const validItems = histIds.map(id => data.find(d => d.id === id)).filter(Boolean);
+  
+  if (validItems.length === 0) {
+    histSection.style.display = 'none';
+    return;
+  }
+  
+  histSection.style.display = 'block';
+  histCar.innerHTML = validItems.map(item => {
+    const histData = h[item.id];
+    return `
+      <div class="cc" onclick="openModal('${item.id}', true)">
+        ${item.poster?`<img src="${item.poster}" alt="${item.title}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}<div class="cc-ph" ${item.poster?'style="display:none"':''}>🎬</div>
+        <div class="cc-ov"><div class="cc-play"><svg width="13" height="13" fill="white" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>
+        <div class="cc-body">
+          <div class="cc-title">${item.title}</div>
+          <div class="cc-meta">
+            <span class="car-label new" style="background:rgba(59,130,246,0.25);color:#93c5fd;border-color:rgba(59,130,246,0.2)">
+              <span>⏱️</span>
+              Quedaste en ${formatTime(histData.time)}
+            </span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
 function renderCarousel(data){
+  renderHistory(data);
   const views=getViews();
-  // 3 most viewed
-  const byViews=[...data].filter(d=>views[d.id]>0).sort((a,b)=>(views[b.id]||0)-(views[a.id]||0)).slice(0,3);
-  // 3 most recent (not already in byViews)
+  // 5 most viewed
+  const byViews=[...data].sort((a,b)=>(views[b.id]||0)-(views[a.id]||0)).slice(0,5);
+  // 5 most recent (not already in byViews)
   const viewIds=new Set(byViews.map(d=>d.id));
-  const recent=[...data].reverse().filter(d=>!viewIds.has(d.id)).slice(0,3);
+  const recent=[...data].reverse().filter(d=>!viewIds.has(d.id)).slice(0,5);
   const combined=[...byViews,...recent];
   const car=document.getElementById('carousel');
   if(!combined.length){car.innerHTML='<div style="padding:20px;color:var(--mt);font-size:13px">Sin contenido.</div>';return}
   // label: hot for views, new for recent
   car.innerHTML=combined.map((item,i)=>`
     <div class="cc" onclick="openModal('${item.id}')">
+      ${isItemCompleted(item) ? `<div style="position:absolute;top:6px;right:6px;background:var(--blue);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 2px 5px rgba(0,0,0,0.5);" title="Completado"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
       ${item.poster?`<img src="${item.poster}" alt="${item.title}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}<div class="cc-ph" ${item.poster?'style="display:none"':''}>🎬</div>
       <div class="cc-ov"><div class="cc-play"><svg width="13" height="13" fill="white" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>
       <div class="cc-body">
         <div class="cc-title">${item.title}</div>
         <div class="cc-meta">
-          <span class="car-label ${i<byViews.length?'hot':'new'}">${i<byViews.length?'🔥 Vista':'🆕 Nueva'}</span>
+          <span class="car-label ${i < byViews.length ? 'hot' : 'new'}">
+            <span>${i < byViews.length ? '🔥' : '🆕'}</span>
+            ${i < byViews.length ? 'Popular' : 'Nuevo'}
+          </span>
           ${item.year?`<span style="font-size:10px;color:var(--mt);font-family:var(--mo)">${item.year}</span>`:''}
         </div>
       </div>
     </div>`).join('');
 }
 
-function scrollCar(d){document.getElementById('carousel').scrollBy({left:d*340,behavior:'smooth'})}
+function scrollElem(id, d){document.getElementById(id).scrollBy({left:d*340,behavior:'smooth'})}
 
 /* ── GENRE/YEAR PILLS ── */
 function buildPills(data){
@@ -434,7 +687,57 @@ function navFilter(t,el){
   applyFilters();
   document.querySelector('.cat-section').scrollIntoView({behavior:'smooth'});
 }
-function onSearch(){searchQ=document.getElementById('navSearch').value.toLowerCase();applyFilters()}
+function onSearch(){
+  searchQ=document.getElementById('navSearch').value.toLowerCase();
+  applyFilters();
+  renderSearchSuggestions();
+}
+
+function renderSearchSuggestions() {
+  const res = document.getElementById('srchResults');
+  if(!searchQ) { res.classList.remove('active'); return; }
+  
+  const matches = allData.filter(x => 
+    x.title.toLowerCase().includes(searchQ) || 
+    (x.genres||[]).some(g => g.toLowerCase().includes(searchQ))
+  ).slice(0, 10);
+  
+  if(!matches.length) {
+    res.innerHTML = '<div style="padding:15px;text-align:center;color:var(--mt);font-size:13px">No se encontraron resultados</div>';
+  } else {
+    res.innerHTML = matches.map(m => `
+      <div class="srch-item" onclick="openSearchItem('${m.id}')">
+        ${m.poster?`<img src="${m.poster}" alt="">`:`<div style="width:36px;height:50px;background:var(--s2);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">🎬</div>`}
+        <div class="srch-item-info">
+          <div class="srch-item-title">${m.title}</div>
+          <div class="srch-item-meta">${m.type} • ${m.year||''}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+  res.classList.add('active');
+}
+
+function openSearchItem(id) {
+  openModal(id);
+  document.getElementById('srchResults').classList.remove('active');
+  if(window.innerWidth <= 768) closeMobileSearch();
+}
+
+function toggleMobileSearch(){
+  document.getElementById('navSearchCont').classList.add('active');
+  document.querySelector('.nl').classList.add('hide-mobile');
+  document.querySelector('.nlinks').classList.add('hide-mobile');
+  const input = document.getElementById('navSearch');
+  setTimeout(()=>input.focus(), 100);
+}
+function closeMobileSearch(){
+  document.getElementById('navSearchCont').classList.remove('active');
+  document.querySelector('.nl').classList.remove('hide-mobile');
+  document.querySelector('.nlinks').classList.remove('hide-mobile');
+  document.getElementById('navSearch').value = '';
+  onSearch();
+}
 
 function applyFilters(){
   let d=[...allData];
@@ -455,6 +758,7 @@ function renderGrid(data){
   }
   grid.innerHTML=[...data].reverse().map(item=>`
     <div class="card" onclick="openModal('${item.id}')">
+      ${isItemCompleted(item) ? `<div style="position:absolute;top:8px;right:8px;background:var(--blue);color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:0 2px 6px rgba(0,0,0,0.6);" title="Completado"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
       ${item.poster?`<img class="card-poster" src="${item.poster}" alt="${item.title}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}<div class="card-ph" ${item.poster?'style="display:none"':''}>🎬</div>
       <div class="card-ov"><div class="card-play"><svg width="14" height="14" fill="white" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>
       <div class="card-body">
@@ -462,18 +766,33 @@ function renderGrid(data){
         <div class="card-meta">
           <span class="cbadge ${badgeClass(item.type)}">${item.type}</span>
           ${item.year?`<span style="font-size:10px;color:var(--mt);font-family:var(--mo)">${item.year}</span>`:''}
-          ${item.rating?`<span style="font-size:10px;color:#fbbf24">★${item.rating}</span>`:''}
+          ${item.rating?`<span style="font-size:10px;color:#fbbf24;margin-left:auto">★${item.rating}</span>`:''}
         </div>
       </div>
     </div>`).join('');
 }
 
 /* ── MODAL ── */
-function openModal(id){
+function openModal(id, fromHistory=false){
   const item=allData.find(d=>d.id===id);if(!item)return;
   curItem=item;curSeason=0;curEp=0;
+  
+  if (fromHistory && item.type === 'Series') {
+    const hist = getHistory()[id];
+    if (hist && hist.episodeId) {
+      item.seasons.forEach((s, sIdx) => {
+        s.episodes.forEach((e, eIdx) => {
+          if ((e.id || `S${sIdx}E${eIdx}`) === hist.episodeId) {
+            curSeason = sIdx;
+            curEp = eIdx;
+          }
+        });
+      });
+    }
+  }
+
   // increment view
-  const v=getViews();v[id]=(v[id]||0)+1;saveViews(v);
+  trackView(id);
   // backdrop
   const mb=document.getElementById('modalBack');
   mb.style.backgroundImage=(item.backdrop||item.poster)?`url(${item.backdrop||item.poster})`:'';
@@ -503,14 +822,394 @@ function buildModalBody(){
   `;
 }
 
+/* ── PLAYER LOGIC ── */
+function isDirectVideo(url) {
+  if (!url) return false;
+  const ext = url.split('?')[0].split('.').pop().toLowerCase();
+  return ['mp4', 'm3u8', 'ts', 'webm', 'ogv'].includes(ext) || url.includes('m3u8') || url.includes('.mp4');
+}
+
+function formatTime(s) {
+  if (isNaN(s)) return '0:00';
+  if (!isFinite(s)) return 'En vivo';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  return h > 0 ? `${h}:${m < 10 ? '0' + m : m}:${sec < 10 ? '0' + sec : sec}` : `${m}:${sec < 10 ? '0' + sec : sec}`;
+}
+
+function createCustomPlayer(cont, url) {
+  if (!cont) return;
+  cont.innerHTML = `
+    <div class="custom-player" id="cp-wrap">
+      <video id="cp-video" playsinline></video>
+      <div class="unmute-overlay" id="cp-unmute"><svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg> Haz clic para activar sonido</div>
+      <div class="resume-overlay" id="cp-resume" style="display:none; position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:40; align-items:center; justify-content:center; flex-direction:column; gap:15px; color:#fff;">
+        <div style="font-size:16px; font-weight:700">Parece que dejaste este video en <span id="cp-resume-time" style="color:var(--blue)"></span></div>
+        <div style="display:flex; gap:10px;">
+          <button id="cp-resume-btn" style="padding:10px 20px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-family:var(--fn)">Seguir viendo</button>
+          <button id="cp-restart-btn" style="padding:10px 20px; background:rgba(255,255,255,0.15); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-family:var(--fn)">Reiniciar</button>
+        </div>
+      </div>
+      <div class="player-controls" id="cp-controls">
+        <div class="player-top-row">
+          <div class="player-progress-wrap" id="cp-progress-wrap">
+            <div class="player-progress-bar" id="cp-progress-bar">
+              <div class="player-progress-handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="player-bottom-row">
+          <div class="player-left">
+            <button class="player-btn" id="cp-play-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path id="cp-play-icon" d="M8 5v14l11-7z"/></svg></button>
+            <button class="player-btn" id="cp-rev-btn" title="Retroceder 10s"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg></button>
+            <button class="player-btn" id="cp-fwd-btn" title="Adelantar 10s"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg></button>
+            <div class="player-time"><span id="cp-cur">0:00</span> / <span id="cp-dur">0:00</span></div>
+            <div class="player-left" style="margin-left:5px">
+              <button class="player-btn" id="cp-vol-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="overflow:visible"><path id="cp-vol-icon" d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+            </div>
+          </div>
+          <div class="player-right">
+            <div class="player-branding">Lumina <span>Movie</span></div>
+            <button class="player-btn" id="cp-pip-btn" title="Picture in Picture"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="13" y="11" width="7" height="7" rx="1"/></svg></button>
+            <div class="player-select-wrap">
+              <button class="player-btn" id="cp-settings-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="overflow:visible"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+              <div class="player-settings-menu" id="cp-settings-menu">
+                <div class="player-submenu active" id="cp-main-menu">
+                  <div class="player-option" onclick="window.switchSubmenu('audio')" id="opt-audio"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg> Audio <span class="val" id="val-audio" style="font-size:11px;opacity:0.5">...</span></div>
+                  <div class="player-option" onclick="window.switchSubmenu('subs')" id="opt-subs"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"/><path d="M7 15h3M14 15h3"/></svg> Subtítulos <span class="val" id="val-subs" style="font-size:11px;opacity:0.5">Off</span></div>
+                  <div class="player-option" onclick="window.switchSubmenu('quality')" id="opt-quality"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Calidad <span class="val" id="val-quality" style="font-size:11px;opacity:0.5">Auto</span></div>
+                </div>
+                <div class="player-submenu" id="cp-audio-submenu">
+                  <div class="player-menu-header" onclick="window.switchSubmenu('main')">← Audio</div>
+                  <div id="cp-audio-list"></div>
+                </div>
+                <div class="player-submenu" id="cp-subs-submenu">
+                  <div class="player-menu-header" onclick="window.switchSubmenu('main')">← Subtítulos</div>
+                  <div id="cp-sub-list"></div>
+                </div>
+                <div class="player-submenu" id="cp-quality-submenu">
+                  <div class="player-menu-header" onclick="window.switchSubmenu('main')">← Calidad</div>
+                  <div id="cp-quality-list"></div>
+                </div>
+              </div>
+            </div>
+            <button class="player-btn" id="cp-fs-btn"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const video = cont.querySelector('#cp-video');
+  const playBtn = cont.querySelector('#cp-play-btn');
+  const playIcon = cont.querySelector('#cp-play-icon');
+  const fwdBtn = cont.querySelector('#cp-fwd-btn');
+  const revBtn = cont.querySelector('#cp-rev-btn');
+  const progWrap = cont.querySelector('#cp-progress-wrap');
+  const progBar = cont.querySelector('#cp-progress-bar');
+  const curTxt = cont.querySelector('#cp-cur');
+  const durTxt = cont.querySelector('#cp-dur');
+  const volBtn = cont.querySelector('#cp-vol-btn');
+  const volIcon = cont.querySelector('#cp-vol-icon');
+  const fsBtn = cont.querySelector('#cp-fs-btn');
+  const pipBtn = cont.querySelector('#cp-pip-btn');
+  const wrap = cont.querySelector('#cp-wrap');
+  
+  const setBtn = cont.querySelector('#cp-settings-btn');
+  const setMenu = cont.querySelector('#cp-settings-menu');
+  const audioList = cont.querySelector('#cp-audio-list');
+  const subList = cont.querySelector('#cp-sub-list');
+  const qualList = cont.querySelector('#cp-quality-list');
+  const valAudio = cont.querySelector('#val-audio');
+  const valSubs = cont.querySelector('#val-subs');
+  const valQuality = cont.querySelector('#val-quality');
+
+  window.switchSubmenu = (name) => {
+    setMenu.querySelectorAll('.player-submenu').forEach(s => s.classList.remove('active'));
+    setMenu.querySelector(`#cp-${name}-menu`).classList.add('active');
+  };
+
+  // Autoplay and volume logic
+  const unmuteOverlay = cont.querySelector('#cp-unmute');
+
+  const updateVolIcon = (muted) => {
+    volIcon.setAttribute('d', muted ? 'M11 5L6 9H2v6h4l5 4V5zM16 9l6 6M22 9l-6 6' : 'M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07');
+    unmuteOverlay.classList.toggle('active', muted);
+  };
+
+  const hist = getHistory();
+  const eid = getEpId();
+  const histData = hist[curItem?.id];
+  let resumeTime = 0;
+  if (histData && ((!eid && !histData.episodeId) || histData.episodeId === eid) && histData.time > 10) {
+    resumeTime = histData.time;
+  }
+
+  const playNow = () => {
+    video.muted = false;
+    video.play().then(() => {
+      updateVolIcon(false);
+    }).catch(() => {
+      // Fallback to muted
+      video.muted = true;
+      updateVolIcon(true);
+      video.play().catch(e => console.error("Autoplay totally blocked", e));
+    });
+  };
+
+  const tryPlay = () => {
+    if (resumeTime > 0) {
+      document.getElementById('cp-resume-time').textContent = formatTime(resumeTime);
+      document.getElementById('cp-resume').style.display = 'flex';
+      
+      document.getElementById('cp-resume-btn').onclick = (e) => {
+        e.stopPropagation();
+        document.getElementById('cp-resume').style.display = 'none';
+        
+        const doResume = () => {
+          try { video.currentTime = resumeTime; } catch(err){}
+          resumeTime = 0;
+          playNow();
+        };
+
+        if (video.readyState >= 1) {
+          doResume();
+        } else {
+          video.addEventListener('loadedmetadata', doResume, {once: true});
+          playNow(); // Attempt to start fetching
+        }
+      };
+      
+      document.getElementById('cp-restart-btn').onclick = (e) => {
+        e.stopPropagation();
+        document.getElementById('cp-resume').style.display = 'none';
+        
+        const doRestart = () => {
+          try { video.currentTime = 0; } catch(err){}
+          resumeTime = 0;
+          playNow();
+        };
+
+        if (video.readyState >= 1) {
+          doRestart();
+        } else {
+          video.addEventListener('loadedmetadata', doRestart, {once: true});
+          playNow(); // Attempt to start fetching
+        }
+      };
+      return; // Wait for user choice
+    }
+
+    playNow();
+  };
+
+  unmuteOverlay.onclick = (e) => {
+    e.stopPropagation();
+    video.muted = false;
+    updateVolIcon(false);
+    if (video.paused) video.play().catch(() => {});
+  };
+
+  // Stream Support
+  const cleanUrl = url.toLowerCase().split('?')[0];
+  const isTs = cleanUrl.endsWith('.ts');
+  const isHls = cleanUrl.includes('.m3u8') || url.toLowerCase().includes('m3u8');
+
+  // Func to proxy URL to bypass CORS and support Range requests
+  const useCorsProxy = true; // Always true to ensure playback works!
+  const getProxyUrl = (u) => {
+    // We use our local server proxy which supports HTTP ranges!
+    if (useCorsProxy) {
+      // Use local proxy
+      return '/proxy?url=' + encodeURIComponent(u);
+    }
+    return u;
+  };
+
+  const finalUrl = getProxyUrl(url);
+
+  if (isTs && typeof mpegts !== 'undefined' && mpegts.getFeatureList().mseLivePlayback) {
+    const player = mpegts.createPlayer({
+      type: 'mse',
+      isLive: false,
+      url: finalUrl
+    });
+    player.attachMediaElement(video);
+    player.load();
+    player.on(mpegts.Events.ERROR, (errType, errDetail) => {
+      console.warn("mpegts error", errType, errDetail);
+    });
+    tryPlay();
+    
+    // Hide track options for raw TS via mpegts
+    cont.querySelector('#opt-audio').style.display = 'none';
+    cont.querySelector('#opt-subs').style.display = 'none';
+    cont.querySelector('#opt-quality').style.display = 'none';
+    
+  } else if (Hls.isSupported() && isHls) {
+    const hls = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+      backBufferLength: 90,
+      maxBufferLength: 30,
+      maxMaxBufferLength: 600,
+      debug: false,
+      xhrSetup: (xhr) => {
+        xhr.withCredentials = false;
+      }
+    });
+    
+    hls.loadSource(finalUrl);
+
+    hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (e, data) => {
+      if (data.fatal) {
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        else hls.destroy();
+      }
+    });
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      tryPlay();
+      // Audio tracks
+      const audioTracks = hls.audioTracks;
+      if (audioTracks.length > 0) {
+        cont.querySelector('#opt-audio').style.display = 'flex';
+        audioList.innerHTML = audioTracks.map((t, i) => `
+          <div class="player-option ${hls.audioTrack === i ? 'active' : ''}" onclick="window.setAudioTrack(${i}, '${t.name || `Pista ${i + 1}`}')">
+            ${t.name || `Pista ${i + 1}`}
+          </div>`).join('');
+        const esIndex = audioTracks.findIndex(t => (t.name||'').toLowerCase().includes('es') || (t.lang||'').toLowerCase().includes('es'));
+        if (esIndex !== -1) { hls.audioTrack = esIndex; valAudio.textContent = audioTracks[esIndex].name || 'Español'; }
+        else { valAudio.textContent = audioTracks[hls.audioTrack]?.name || 'Pista 1'; }
+      } else {
+        cont.querySelector('#opt-audio').style.display = 'none';
+      }
+      
+      // Subtitles
+      const subTracks = hls.subtitleTracks;
+      if (subTracks.length > 0) {
+        cont.querySelector('#opt-subs').style.display = 'flex';
+        let subHtml = `<div class="player-option ${hls.subtitleTrack === -1 ? 'active' : ''}" onclick="window.setSubTrack(-1, 'Off')">Desactivar</div>`;
+        subHtml += subTracks.map((t, i) => `
+          <div class="player-option ${hls.subtitleTrack === i ? 'active' : ''}" onclick="window.setSubTrack(${i}, '${t.name || `Sub ${i + 1}`}')">
+            ${t.name || `Sub ${i + 1}`}
+          </div>`).join('');
+        subList.innerHTML = subHtml;
+      } else {
+        cont.querySelector('#opt-subs').style.display = 'none';
+      }
+
+      // Quality
+      const levels = hls.levels;
+      if (levels.length > 1) {
+        cont.querySelector('#opt-quality').style.display = 'flex';
+        let qHtml = `<div class="player-option ${hls.currentLevel === -1 ? 'active' : ''}" onclick="window.setQualityLevel(-1, 'Auto')">Automático</div>`;
+        qHtml += levels.map((l, i) => `
+          <div class="player-option ${hls.currentLevel === i ? 'active' : ''}" onclick="window.setQualityLevel(${i}, '${l.height}p')">
+            ${l.height}p
+          </div>`).join('');
+        qualList.innerHTML = qHtml;
+      } else {
+        cont.querySelector('#opt-quality').style.display = 'none';
+      }
+      
+      window.setAudioTrack = (idx, name) => {
+        hls.audioTrack = idx; valAudio.textContent = name;
+        audioList.querySelectorAll('.player-option').forEach((o, i) => o.classList.toggle('active', i === idx));
+        window.switchSubmenu('main');
+      };
+      window.setSubTrack = (idx, name) => {
+        hls.subtitleTrack = idx; valSubs.textContent = name;
+        subList.querySelectorAll('.player-option').forEach((o, i) => o.classList.toggle('active', (idx === -1 ? i === 0 : i === idx + 1)));
+        window.switchSubmenu('main');
+      };
+      window.setQualityLevel = (idx, name) => {
+        hls.currentLevel = idx; valQuality.textContent = name;
+        qualList.querySelectorAll('.player-option').forEach((o, i) => o.classList.toggle('active', (idx === -1 ? i === 0 : i === idx + 1)));
+        window.switchSubmenu('main');
+      };
+    });
+  } else {
+    video.src = finalUrl; // Pointing to local backend proxy for cross-origin or mixed-content MP4s which supports Range requests
+    tryPlay();
+    // Default options for non-HLS
+    valAudio.textContent = 'Predeterminado';
+    valSubs.textContent = 'Off';
+    valQuality.textContent = 'Estándar';
+    cont.querySelector('#opt-audio').style.display = 'flex';
+    cont.querySelector('#opt-subs').style.display = 'flex';
+    cont.querySelector('#opt-quality').style.display = 'flex';
+    audioList.innerHTML = '<div class="player-option active">Pista predeterminada</div>';
+    subList.innerHTML = '<div class="player-option active">Sin subtítulos</div>';
+    qualList.innerHTML = '<div class="player-option active">Calidad Original</div>';
+    
+    window.setAudioTrack = () => { window.switchSubmenu('main'); };
+    window.setSubTrack = () => { window.switchSubmenu('main'); };
+    window.setQualityLevel = () => { window.switchSubmenu('main'); };
+  }
+
+  playBtn.onclick = () => video.paused ? video.play() : video.pause();
+  fwdBtn.onclick = () => video.currentTime += 10;
+  revBtn.onclick = () => video.currentTime -= 10;
+
+  video.onplay = () => playIcon.setAttribute('d', 'M6 19h4V5h-4v14zm8-14v14h4V5h-4z');
+  video.onpause = () => playIcon.setAttribute('d', 'M8 5v14l11-7z');
+  video.ontimeupdate = () => {
+    const d = video.duration;
+    const p = (video.currentTime / d) * 100 || 0;
+    progBar.style.width = isFinite(d) ? p + '%' : '100%';
+    curTxt.textContent = formatTime(video.currentTime);
+    if (curItem && !isNaN(d)) {
+      const eid = getEpId();
+      saveHistory(curItem.id, eid, video.currentTime, d);
+    }
+  };
+  video.ondurationchange = () => durTxt.textContent = formatTime(video.duration);
+  video.onloadedmetadata = () => durTxt.textContent = formatTime(video.duration);
+  progWrap.onclick = (e) => {
+    const d = video.duration;
+    if (!isFinite(d)) return;
+    const rect = progWrap.getBoundingClientRect();
+    const p = (e.clientX - rect.left) / rect.width;
+    video.currentTime = p * d;
+  };
+  volBtn.onclick = () => {
+    video.muted = !video.muted;
+    updateVolIcon(video.muted);
+  };
+  fsBtn.onclick = () => !document.fullscreenElement ? wrap.requestFullscreen() : document.exitFullscreen();
+  pipBtn.onclick = () => {
+    if (document.pictureInPictureElement) document.exitPictureInPicture();
+    else if (video.requestPictureInPicture) video.requestPictureInPicture();
+  };
+  setBtn.onclick = (e) => { e.stopPropagation(); setMenu.classList.toggle('active'); window.switchSubmenu('main'); };
+
+  let hct = null;
+  wrap.onmousemove = () => { wrap.classList.add('active'); if(hct) clearTimeout(hct); hct = setTimeout(()=>wrap.classList.remove('active'), 3000); };
+  document.addEventListener('click', () => { setMenu.classList.remove('active'); });
+  setMenu.onclick = (e) => e.stopPropagation();
+}
+
 function buildMoviePlayer(item){
   if(!item.video&&!item.download)return'';
+  
+  const useDirect = isDirectVideo(item.video);
+  
+  setTimeout(() => {
+    const cont = document.getElementById('moviePlayerCont');
+    if(cont && useDirect) createCustomPlayer(cont, item.video);
+  }, 100);
+
   return`
     <div class="modal-actions">
       ${item.video?`<div class="ptabs"><button class="ptab active">▶ Servidor 1</button></div>`:''}
       ${item.download?`<a class="btn-dl" href="${item.download}" target="_blank" download><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Descargar</a>`:''}
     </div>
-    ${item.video?`<div class="vframe"><iframe src="${item.video}" allowfullscreen allow="autoplay; encrypted-media"></iframe></div>`:''}`;
+    ${item.video?`
+      <div class="vframe" id="moviePlayerCont">
+        ${!useDirect ? `<iframe src="${item.video}" allowfullscreen allow="autoplay; encrypted-media"></iframe>` : ''}
+      </div>` : ''}`;
 }
 
 function buildSeriesBlock(seasons){
@@ -529,9 +1228,13 @@ function buildSeriesBlock(seasons){
 }
 
 function buildEpList(eps){
-  return eps.map((ep,i)=>`
+  const c = getCompleted()[curItem.id] || [];
+  return eps.map((ep,i)=>{
+    const eid = ep.id || `S${curSeason}E${i}`;
+    const isComp = c.includes(eid);
+    return `
     <div class="ep-item ${i===curEp?'playing':''}" id="ep-${i}">
-      <div class="ep-num">${i+1}</div>
+      <div class="ep-num">${isComp ? '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : i+1}</div>
       <div class="ep-info">
         <div class="ep-title">${ep.title||`Episodio ${i+1}`}</div>
         <div class="ep-sub">${ep.url?'Disponible para ver':'Sin enlace'}</div>
@@ -540,7 +1243,8 @@ function buildEpList(eps){
         ${ep.url?`<button class="btn-ep-play" onclick="playEp(${i})"><svg width="11" height="11" fill="currentColor" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Ver</button>`:''}
         ${ep.download?`<a class="btn-ep-dl" href="${ep.download}" target="_blank" download><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></a>`:''}
       </div>
-    </div>`).join('')||'<div style="color:var(--mt);font-size:13px;padding:12px">Sin episodios en esta temporada.</div>';
+    </div>`;
+  }).join('')||'<div style="color:var(--mt);font-size:13px;padding:12px">Sin episodios en esta temporada.</div>';
 }
 
 function switchSeason(i){curSeason=i;curEp=0;buildModalBody();document.getElementById('modalOv').querySelector('.modal').scrollTop=0}
@@ -557,7 +1261,15 @@ function playEp(i){
     const sw=document.querySelector('.seasons-wrap');
     if(sw)sw.parentNode.insertBefore(pz,sw);
   }
-  pz.innerHTML=`<div class="vframe"><iframe src="${ep.url}" allowfullscreen allow="autoplay; encrypted-media"></iframe></div>`;
+  
+  const useDirect = isDirectVideo(ep.url);
+  if (useDirect) {
+    pz.className = 'vframe';
+    createCustomPlayer(pz, ep.url);
+  } else {
+    pz.innerHTML = `<div class="vframe"><iframe src="${ep.url}" allowfullscreen allow="autoplay; encrypted-media"></iframe></div>`;
+  }
+  
   pz.scrollIntoView({behavior:'smooth',block:'nearest'});
   // highlight + update ep list
   document.querySelectorAll('.ep-item').forEach((el,idx)=>el.classList.toggle('playing',idx===i));
@@ -581,19 +1293,84 @@ function nextEp(){
 }
 
 function closeModal(){
-  document.getElementById('modalOv').classList.remove('open');
+  const ov = document.getElementById('modalOv');
+  const modal = document.getElementById('modalElem');
+  ov.classList.remove('open');
   document.body.style.overflow='';
+  // Reset swipe-related styles
+  setTimeout(() => {
+    modal.style.transform = '';
+    ov.style.opacity = '';
+  }, 300);
   // stop video
   const pz=document.getElementById('epPlayer');if(pz)pz.innerHTML='';
   const vf=document.querySelector('.vframe');if(vf)vf.innerHTML='';
   curItem=null;
 }
 function closeModalOv(e){if(e.target===document.getElementById('modalOv'))closeModal()}
+
+/* ── SWIPE TO CLOSE JS ── */
+let touchY = 0;
+let touchDelta = 0;
+let isDragging = false;
+
+function initSwipe() {
+  const modal = document.getElementById('modalElem');
+  const overlay = document.getElementById('modalOv');
+
+  modal.addEventListener('touchstart', (e) => {
+    // Only allow swipe from the top area or when scrolled to top
+    if (modal.scrollTop > 5) return;
+    touchY = e.touches[0].clientY;
+    isDragging = true;
+    modal.style.transition = 'none';
+  }, { passive: true });
+
+  modal.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const currentY = e.touches[0].clientY;
+    touchDelta = currentY - touchY;
+
+    if (touchDelta > 0) {
+      // Prevent default scrolling if we're dragging down
+      if (modal.scrollTop <= 0) {
+        if (e.cancelable) e.preventDefault();
+        modal.style.transform = `translateY(${touchDelta}px)`;
+        // Fade out overlay based on drag
+        const opacity = Math.max(0, 1 - touchDelta / 400);
+        overlay.style.opacity = opacity;
+      } else {
+        isDragging = false;
+      }
+    } else {
+      // Reset if swiping up
+      modal.style.transform = '';
+      overlay.style.opacity = '1';
+    }
+  }, { passive: false });
+
+  modal.addEventListener('touchend', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    modal.style.transition = 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s';
+    
+    if (touchDelta > 150) {
+      modal.style.transform = `translateY(100vh)`;
+      setTimeout(closeModal, 100);
+    } else {
+      modal.style.transform = '';
+      overlay.style.opacity = '1';
+    }
+    touchDelta = 0;
+  });
+}
+
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
 /* ── INIT ── */
 function init(){
   initFirebase();
+  initSwipe();
 }
 
 // Fallback: listen for localStorage changes (same-device tabs, or when Firebase not configured)

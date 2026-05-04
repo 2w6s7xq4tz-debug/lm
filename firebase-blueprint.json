@@ -48,6 +48,18 @@
       "properties": {
         "data": { "type": "object", "additionalProperties": { "type": "integer" } }
       }
+    },
+    "User": {
+      "title": "User",
+      "description": "Moderador o administrador del panel.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string", "enum": ["super", "mod"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["username", "password", "role"]
     }
   },
   "firestore": {
@@ -58,6 +70,10 @@
     "views/data": {
       "schema": "ViewsData",
       "description": "Documento único para almacenar los contadores de vistas."
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Colección de usuarios con acceso al panel."
     }
   }
 }

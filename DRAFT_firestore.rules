@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // Hardened Schema Validations
+    function isValidCatalogItem(data) {
+      return data.id is string && data.id.size() <= 64 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.type in ["Películas", "Series", "Documentales", "Anime"] &&
+             data.poster is string && data.poster.size() <= 500 &&
+             data.backdrop is string && data.backdrop.size() <= 500 &&
+             data.year is string && data.year.size() <= 10 &&
+             data.status in ["En Vivo", "Próximamente", "Borrador"];
+    }
+
+    function isValidViewsData(data) {
+      // Views data is a map of ID -> Int
+      // Since Firestore doesn't support recursive map checking easily, 
+      // we at least check that 'data' field exists and is a map.
+      return data.keys().hasOnly(['data']) && data.data is map;
+    }
+
+    // CATALOG COLLECTION
+    match /catalog/{itemId} {
+      allow read: if true;
+      allow create: if isValidId(itemId) && isValidCatalogItem(incoming());
+      allow update: if isValidId(itemId) && isValidCatalogItem(incoming());
+      allow delete: if true; // In production, restrict this to Admin
+    }
+
+    // VIEWS COLLECTION
+    match /views/{docId} {
+      allow read: if true;
+      allow write: if (docId == 'data') && isValidViewsData(incoming());
+    }
+  }
+}
