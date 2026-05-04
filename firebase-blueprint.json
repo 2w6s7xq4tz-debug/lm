@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "CatalogItem": {
+      "title": "Catalog Item",
+      "description": "Un elemento del catálogo (película, serie, documental o anime).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["Películas", "Series", "Documentales", "Anime"] },
+        "poster": { "type": "string", "format": "uri" },
+        "backdrop": { "type": "string", "format": "uri" },
+        "video": { "type": "string", "format": "uri" },
+        "download": { "type": "string", "format": "uri" },
+        "year": { "type": "string" },
+        "rating": { "type": "string" },
+        "desc": { "type": "string" },
+        "genres": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["En Vivo", "Próximamente", "Borrador"] },
+        "seasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "num": { "type": "integer" },
+              "episodes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": { "type": "string" },
+                    "url": { "type": "string", "format": "uri" },
+                    "download": { "type": "string", "format": "uri" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "type", "publishedAt"]
+    },
+    "ViewsData": {
+      "title": "Views Data",
+      "description": "Contador de vistas por ID de contenido.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "object", "additionalProperties": { "type": "integer" } }
+      }
+    }
+  },
+  "firestore": {
+    "catalog/{itemId}": {
+      "schema": "CatalogItem",
+      "description": "Colección de elementos del catálogo."
+    },
+    "views/data": {
+      "schema": "ViewsData",
+      "description": "Documento único para almacenar los contadores de vistas."
+    }
+  }
+}

@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helpers
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validations
+    function isValidCatalogItem(data) {
+      return data.keys().hasAll(['id', 'title', 'type', 'publishedAt'])
+        && data.id is string && data.id.size() <= 100
+        && data.title is string && data.title.size() <= 200
+        && data.type in ['Películas', 'Series', 'Documentales', 'Anime']
+        && data.publishedAt is string;
+    }
+
+    match /catalog/{itemId} {
+      allow read: if true;
+      allow create: if isValidId(itemId) && isValidCatalogItem(incoming());
+      allow update: if isValidId(itemId) && isValidCatalogItem(incoming());
+      allow delete: if true; // In a real app, restrict to admins
+    }
+
+    match /views/data {
+      allow read: if true;
+      allow write: if true; // Publicly incrementable in this demo
+    }
+  }
+}
